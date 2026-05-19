@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <h1>{{ person.display_name }}</h1>
+        <p>{{ person.phone or "No phone saved" }} | {{ person.status or "New" }}</p>
+    </div>
+</section>
+
+<section class="layout-two">
+    <div class="stack-section">
+        <article class="card">
+            <h2>Profile Details</h2>
+            <p><strong>App:</strong> {{ person.app_name }}</p>
+            <p><strong>Name:</strong> {{ person.name }}</p>
+            <p><strong>Location:</strong> {{ person.location }}</p>
+            <p><strong>Age:</strong> {{ person.age or "??" }}</p>
+            <p><strong>Tags:</strong> {{ person.tags or "None" }}</p>
+        </article>
+
+        <article class="card">
+            <h2>Uploads</h2>
+            <form method="post" action="/profiles/{{ person.id }}/uploads" enctype="multipart/form-data" class="stack">
+                <input type="file" name="uploaded_file" required>
+                <button type="submit">Upload File</button>
+            </form>
+            <div class="thumb-grid">
+                {% for item in person.uploads %}
+                <a href="/uploads/{{ item.stored_name }}" target="_blank" class="thumb-card">
+                    <div class="thumb-preview">{{ item.original_name.split(".")[-1].upper() }}</div>
+                    <div>{{ item.original_name }}</div>
+                </a>
+                {% else %}
+                <p>No uploads yet.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card">
+            <h2>Timeline</h2>
+            <form method="post" action="/profiles/{{ person.id }}/timeline" class="stack">
+                <label>Type
+                    <select name="item_type">
+                        <option value="message">Message</option>
+                        <option value="event">Event</option>
+                        <option value="date">Date / Meetup</option>
+                        <option value="logistics">Payment / Logistics</option>
+                    </select>
+                </label>
+                <label>Details<textarea name="content" rows="4" required></textarea></label>
+                <button type="submit">Add Timeline Item</button>
+            </form>
+            <div class="timeline">
+                {% for item in person.timeline_items %}
+                <div class="timeline-item">
+                    <div class="timeline-type">{{ item.item_type }}</div>
+                    <div>{{ item.content }}</div>
+                    <div class="timeline-date">{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+                </div>
+                {% else %}
+                <p>No timeline items yet.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </div>
+
+    <div class="stack-section">
+        <article class="card">
+            <h2>Notes and Review</h2>
+            <form method="post" action="/profiles/{{ person.id }}/notes" class="stack">
+                <label>Private Notes<textarea name="notes" rows="4">{{ person.notes or "" }}</textarea></label>
+                <label>Summary / Overview<textarea name="summary" rows="3">{{ person.summary or "" }}</textarea></label>
+                <label>Red Flags<textarea name="red_flags" rows="3">{{ person.red_flags or "" }}</textarea></label>
+                <label>Green Flags<textarea name="green_flags" rows="3">{{ person.green_flags or "" }}</textarea></label>
+                <label>Boundaries<textarea name="boundaries" rows="3">{{ person.boundaries or "" }}</textarea></label>
+                <label>Follow-up Reminders<textarea name="reminders" rows="3">{{ person.reminders or "" }}</textarea></label>
+                <label>Initial Review Ready
+                    <select name="initial_review_ready">
+                        <option value="false" {% if not person.initial_review_ready %}selected{% endif %}>Not Ready</option>
+                        <option value="true" {% if person.initial_review_ready %}selected{% endif %}>Ready</option>
+                    </select>
+                </label>
+                <button type="submit">Save Notes</button>
+            </form>
+        </article>
+
+        <article class="card">
+            <h2>Message Help</h2>
+            <p><strong>Initial text starters</strong></p>
+            <ul>
+                <li>General nice to meet</li>
+                <li>More flirty</li>
+            </ul>
+            <p><strong>Follow-up text</strong></p>
+            <ul>
+                <li>General flirty conversation</li>
+                <li>More direct flirty, edgy</li>
+                <li>More sexually flirty with physical compliments and sexually underpinned suggestions</li>
+            </ul>
+        </article>
+    </div>
+</section>
+{% endblock %}

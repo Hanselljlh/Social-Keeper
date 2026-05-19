@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Social Keeper</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+    <main class="login-card">
+        <h1>Social Keeper</h1>
+        <p>Private local login</p>
+        {% if error %}
+        <div class="alert">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/login" class="stack">
+            <label>Username<input type="text" name="username" required></label>
+            <label>Password<input type="password" name="password" required></label>
+            <button type="submit">Login</button>
+        </form>
+        <div class="version">v{{ version }}</div>
+    </main>
+</body>
+</html>

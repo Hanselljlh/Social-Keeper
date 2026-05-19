@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    container_name: social-keeper
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ${CONFIG_DIR}:/app/runtime/config
+      - ${DB_DIR}:/app/runtime/database
+      - ${UPLOADS_DIR}:/app/runtime/uploads
+      - ${EXPORTS_DIR}:/app/runtime/exports
+      - ${LOGS_DIR}:/app/runtime/logs
+    restart: unless-stopped

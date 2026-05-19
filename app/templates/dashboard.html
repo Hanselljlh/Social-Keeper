@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+    <h1>Dashboard</h1>
+    <a href="/profiles/new" class="button-link">Create Profile</a>
+</section>
+
+<section class="card-grid">
+    {% for person in people %}
+    <a href="/profiles/{{ person.id }}" class="card profile-card">
+        <div class="card-top">
+            <h2>{{ person.display_name }}</h2>
+            <span class="status-pill">{{ person.status or "New" }}</span>
+        </div>
+        <p>{{ person.tags or "No tags yet" }}</p>
+        <p>{{ person.phone or "No phone saved" }}</p>
+        <div class="meta-row">
+            <span>{{ person.app_name }}</span>
+            <span>{{ person.location }}</span>
+        </div>
+    </a>
+    {% else %}
+    <div class="card">
+        <h2>No profiles yet</h2>
+        <p>Create your first person profile.</p>
+    </div>
+    {% endfor %}
+</section>
+{% endblock %}

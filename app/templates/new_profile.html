@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+    <h1>Create Profile</h1>
+</section>
+
+<form method="post" action="/profiles" class="card form-grid">
+    <label>App<input type="text" name="app_name" placeholder="OKC" required></label>
+    <label>Name<input type="text" name="name" placeholder="Annie" required></label>
+    <label>Location<input type="text" name="location" placeholder="NBO West" required></label>
+    <label>Age<input type="text" name="age" placeholder="23 or ??"></label>
+    <label>Phone / WhatsApp<input type="text" name="phone"></label>
+    <label>Status<input type="text" name="status" value="New"></label>
+    <label>Tags<input type="text" name="tags" placeholder="funny, active"></label>
+    <label class="full">Notes<textarea name="notes" rows="5"></textarea></label>
+    <button type="submit">Save Profile</button>
+</form>
+{% endblock %}

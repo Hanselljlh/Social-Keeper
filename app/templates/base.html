@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Keeper</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <div>
+            <a href="/dashboard" class="brand">Social Keeper</a>
+            <div class="version">v{{ version }}</div>
+        </div>
+        <nav>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/profiles/new">New Profile</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+    <main class="page">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
