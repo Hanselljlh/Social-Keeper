@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import re
 import secrets
 import shutil
 import zipfile
@@ -56,6 +57,8 @@ class Person(Base):
     boundaries: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reminders: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     review_overview: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    profile_parser_output: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    conversation_thread: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reminder_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     initial_review_ready: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -107,6 +110,8 @@ def ensure_column(table_name: str, column_name: str, definition: str) -> None:
 
 
 ensure_column("people", "review_overview", "TEXT")
+ensure_column("people", "profile_parser_output", "TEXT")
+ensure_column("people", "conversation_thread", "TEXT")
 ensure_column("people", "distance", "TEXT")
 ensure_column("upload_items", "upload_note", "TEXT")
 ensure_column("people", "reminder_date", "DATE")
@@ -180,6 +185,157 @@ def parse_tags(value: Optional[str]) -> set[str]:
     if not value:
         return set()
     return {part.strip() for part in value.split(",") if part.strip()}
+
+
+def read_text_file(path: Path) -> str:
+    for encoding in ["utf-8", "utf-8-sig", "latin-1"]:
+        try:
+            return path.read_text(encoding=encoding).strip()
+        except UnicodeDecodeError:
+            continue
+    return ""
+
+
+def upload_text_content(item: UploadItem) -> str:
+    if item.extracted_text and item.extracted_text.strip():
+        return item.extracted_text.strip()
+    source = UPLOADS_ROOT / item.stored_name
+    if source.suffix.lower() == ".txt" and source.exists():
+        return read_text_file(source)
+    return ""
+
+
+def normalize_text_lines(value: str) -> list[str]:
+    cleaned = re.sub(r"\r\n?", "\n", value)
+    lines = []
+    seen: set[str] = set()
+    for raw_line in cleaned.split("\n"):
+        line = re.sub(r"\s+", " ", raw_line).strip(" -\t")
+        if len(line) < 2:
+            continue
+        lowered = line.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        lines.append(line)
+    return lines
+
+
+def collect_upload_text(person: Person, category: str) -> list[dict[str, str]]:
+    collected: list[dict[str, str]] = []
+    for item in person.uploads:
+        if (item.upload_category or "profile_intake") != category:
+            continue
+        text_value = upload_text_content(item)
+        if not text_value and not item.upload_note:
+            continue
+        collected.append(
+            {
+                "name": item.original_name,
+                "note": item.upload_note or "",
+                "text": text_value,
+            }
+        )
+    return collected
+
+
+def build_profile_intake_parser(person: Person) -> tuple[str, str]:
+    source_items = collect_upload_text(person, "profile_intake")
+    all_lines: list[str] = []
+    for item in source_items:
+        if item["note"]:
+            all_lines.extend(normalize_text_lines(item["note"]))
+        if item["text"]:
+            all_lines.extend(normalize_text_lines(item["text"]))
+
+    keyword_map = {
+        "work": "Work",
+        "job": "Work",
+        "school": "School",
+        "college": "School",
+        "university": "School",
+        "bio": "Bio",
+        "about": "Bio",
+        "looking for": "Looking For",
+        "height": "Height",
+        "kids": "Kids",
+        "smoke": "Smoking",
+        "drink": "Drinking",
+        "religion": "Religion",
+        "christian": "Religion",
+        "muslim": "Religion",
+        "hobby": "Interests",
+        "interest": "Interests",
+        "love": "Interests",
+        "like": "Interests",
+    }
+    fact_buckets: dict[str, list[str]] = {}
+    for line in all_lines:
+        lower_line = line.lower()
+        for keyword, label in keyword_map.items():
+            if keyword in lower_line:
+                fact_buckets.setdefault(label, [])
+                if line not in fact_buckets[label]:
+                    fact_buckets[label].append(line)
+
+    bio_lines = all_lines[:10]
+    summary_parts = []
+    if bio_lines:
+        summary_parts.append(" ".join(bio_lines[:4]))
+        if len(bio_lines) > 4:
+            summary_parts.append(" ".join(bio_lines[4:8]))
+    summary_text = "\n\n".join(part.strip() for part in summary_parts if part.strip())
+
+    parser_lines = [
+        f"Profile Intake Parser for {person.display_name}",
+        f"Source Files: {len(source_items)}",
+        "",
+        "Bio Draft",
+        summary_text or "No enough copied text yet. Add more profile text or fill extracted text on uploads.",
+        "",
+        "Structured Facts",
+    ]
+    if fact_buckets:
+        for label in sorted(fact_buckets):
+            parser_lines.append(f"{label}:")
+            for line in fact_buckets[label][:5]:
+                parser_lines.append(f"- {line}")
+    else:
+        parser_lines.append("- No structured facts found yet.")
+
+    if source_items:
+        parser_lines.extend(["", "Sources"])
+        for item in source_items:
+            source_note = f" | {item['note']}" if item["note"] else ""
+            parser_lines.append(f"- {item['name']}{source_note}")
+
+    return summary_text, "\n".join(parser_lines).strip()
+
+
+def build_conversation_parser(person: Person) -> str:
+    source_items = collect_upload_text(person, "message_tracking")
+    sections = [f"Conversation Thread for {person.display_name}", ""]
+    if not source_items:
+        sections.append("No message tracking text yet. Upload .txt files or paste screenshot text into extracted text.")
+        return "\n".join(sections).strip()
+
+    for index, item in enumerate(source_items, start=1):
+        header_parts = [f"{index}. {item['name']}"]
+        if item["note"]:
+            header_parts.append(item["note"])
+        sections.append(" | ".join(header_parts))
+        text_value = item["text"].strip()
+        if not text_value:
+            sections.append("[No copied or extracted text yet]")
+        else:
+            lines = normalize_text_lines(text_value)
+            if not lines:
+                sections.append("[No readable message lines found]")
+            else:
+                for line in lines:
+                    sections.append(line)
+        sections.append("")
+    return "\n".join(sections).strip()
 
 
 def apply_person_filters(db: Session, filters: dict[str, str]) -> list[Person]:
@@ -305,6 +461,9 @@ def build_profile_export(person: Person) -> str:
         "Summary",
         person.summary or "None",
         "",
+        "Profile Parser Output",
+        person.profile_parser_output or "None",
+        "",
         "Bio Builder Source",
         "Use profile screenshots and copied text to build a clean profile bio.",
         "",
@@ -322,6 +481,9 @@ def build_profile_export(person: Person) -> str:
         "",
         "Follow-up Reminders",
         person.reminders or "None",
+        "",
+        "Conversation Thread",
+        person.conversation_thread or "None",
         "",
         "Uploads",
     ]
@@ -389,6 +551,10 @@ def merge_people(db: Session, source: Person, target: Person) -> None:
         target.reminders = source.reminders
     if not target.reminder_date and source.reminder_date:
         target.reminder_date = source.reminder_date
+    if not target.profile_parser_output and source.profile_parser_output:
+        target.profile_parser_output = source.profile_parser_output
+    if not target.conversation_thread and source.conversation_thread:
+        target.conversation_thread = source.conversation_thread
 
     for item in source.uploads:
         item.person_id = target.id
@@ -434,6 +600,7 @@ def dashboard(
     app_name: str = "",
     name: str = "",
     location: str = "",
+    distance: str = "",
     age: str = "",
     status: str = "",
     tags: str = "",
@@ -447,6 +614,7 @@ def dashboard(
         "app_name": app_name,
         "name": name,
         "location": location,
+        "distance": distance,
         "age": age,
         "status": status,
         "tags": tags,
@@ -593,7 +761,7 @@ def bulk_update_profiles(
                 tags.add(bulk_add_tag.strip())
                 person.tags = ", ".join(sorted(tags))
         db.commit()
-    return RedirectResponse("/dashboard", status_code=302)
+    return RedirectResponse("/manage", status_code=302)
 
 
 @app.post("/profiles/merge")
@@ -731,7 +899,7 @@ def update_profile(
 
 
 @app.get("/profiles/{person_id}", response_class=HTMLResponse)
-def profile_detail(request: Request, person_id: int):
+def profile_detail(request: Request, person_id: int, conversation_search: str = ""):
     redirect = require_login(request)
     if redirect:
         return redirect
@@ -748,6 +916,12 @@ def profile_detail(request: Request, person_id: int):
             name="profile_detail.html",
             context={
                 "person": person,
+                "conversation_search": conversation_search,
+                "conversation_results": [
+                    line
+                    for line in (person.conversation_thread or "").splitlines()
+                    if conversation_search.strip() and conversation_search.strip().lower() in line.lower()
+                ] if conversation_search.strip() else [],
                 "version": app_version(),
                 "status_options": status_options,
                 "tag_options": tag_options,
@@ -808,6 +982,9 @@ async def upload_file(
             target = person_folder / safe_name
             with target.open("wb") as buffer:
                 shutil.copyfileobj(uploaded_file.file, buffer)
+            extracted_text = ""
+            if target.suffix.lower() == ".txt":
+                extracted_text = read_text_file(target)
             db.add(
                 UploadItem(
                     person_id=person_id,
@@ -816,8 +993,40 @@ async def upload_file(
                     content_type=uploaded_file.content_type,
                     upload_category=chosen_category,
                     upload_note=upload_note.strip(),
+                    extracted_text=extracted_text,
                 )
             )
+            db.commit()
+    return RedirectResponse(f"/profiles/{person_id}", status_code=302)
+
+
+@app.post("/profiles/{person_id}/build-bio")
+def build_profile_bio(request: Request, person_id: int):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    with get_db() as db:
+        person = db.get(Person, person_id)
+        if person:
+            summary_text, parser_output = build_profile_intake_parser(person)
+            person.profile_parser_output = parser_output
+            if summary_text:
+                person.summary = summary_text
+            db.commit()
+    return RedirectResponse(f"/profiles/{person_id}", status_code=302)
+
+
+@app.post("/profiles/{person_id}/build-conversation")
+def build_conversation_thread(request: Request, person_id: int):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    with get_db() as db:
+        person = db.get(Person, person_id)
+        if person:
+            person.conversation_thread = build_conversation_parser(person)
             db.commit()
     return RedirectResponse(f"/profiles/{person_id}", status_code=302)
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 - 2026-05-20
+- Added profile intake parser action that builds a draft bio from profile intake uploads
+- Added stored generated bio output area on profile pages
+- Added conversation parser action that combines message tracking uploads into one readable thread
+- Added conversation search on profile pages
+- Added automatic text import for uploaded `.txt` files
+- Added in-place editing for reusable tags and status choices in Settings
+- Added distance filtering on the dashboard
+- Redirected bulk update actions back to the Manage screen
+
 ## 0.4.0 - 2026-05-20
 - Added dashboard search and filters for app, name, location, age, status, and tags
 - Added editable profile details layout with stronger mobile-friendly sections

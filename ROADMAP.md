@@ -9,6 +9,8 @@
 - Settings screen for editable tags and statuses
 - Structured upload lanes
 - Profile bio and notes area
+- Built-in bio builder from profile intake uploads
+- Built-in conversation thread builder with search
 - Docker Compose setup
 - External data storage
 
@@ -17,9 +19,9 @@
 - Better duplicate conflict review
 - Calendar month view
 - CSV export format
-- Automated profile bio builder from profile intake uploads
-- Automated conversation reader/search view from message tracking uploads
-- Searchable conversation thread view built from message tracking files
+- OCR for screenshots so copied text is not always manual
+- Better parser accuracy for profile facts
+- Better parser accuracy for message speaker separation
 
 ## Later
 - Reminder system

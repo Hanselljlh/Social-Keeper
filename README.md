@@ -9,6 +9,7 @@ Private self-hosted web app for organizing social and dating contact information
 - Profile detail page
 - Separate manage screen for bulk updates
 - Settings screen for reusable tags and status choices
+- Settings edit-in-place for tags and status choices
 - Structured upload lanes
 - Profile bio and notes area
 - Profile export
@@ -19,6 +20,9 @@ Private self-hosted web app for organizing social and dating contact information
 - Real reminder dates
 - Duplicate merge action
 - PDF export
+- Profile intake bio builder
+- Searchable conversation thread builder
+- Automatic `.txt` message import
 - Docker Compose setup
 - External data folders
 
@@ -27,6 +31,9 @@ Private self-hosted web app for organizing social and dating contact information
 - Open a profile to manage basic info, uploads, and notes
 - Use `Manage` for bulk status/tag updates
 - Use `Settings` to add, edit, or remove reusable tags and status choices
+- Use `Build Bio From Intake Files` to turn profile screenshots/copied text into a draft profile bio
+- Use `Build Conversation Thread` to combine message tracking files into one readable thread
+- Use conversation search on each profile to find text inside the generated thread
 
 ## Before you start
 1. Copy `.env.example` to `.env`
@@ -96,4 +103,5 @@ Do not place real data inside the repo itself.
 - No external API use unless you add that later
 - Profiles include a `distance` field in the basic info
 - Upload lanes are split into profile intake, general photos, and message tracking
-- Message tracking uploads are stored now so future automation can turn them into a searchable conversation history
+- Uploaded `.txt` files are read automatically into message tracking text
+- Screenshot-based automation still depends on copied text or manually filled extracted text fields

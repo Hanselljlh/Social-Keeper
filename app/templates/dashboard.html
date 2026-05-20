@@ -36,6 +36,7 @@
     <label>App<input type="text" name="app_name" value="{{ filters.app_name }}" placeholder="OKC"></label>
     <label>Name<input type="text" name="name" value="{{ filters.name }}" placeholder="Annie"></label>
     <label>Location<input type="text" name="location" value="{{ filters.location }}" placeholder="NBO West"></label>
+    <label>Distance<input type="text" name="distance" value="{{ filters.distance }}" placeholder="4 km"></label>
     <label>Age<input type="text" name="age" value="{{ filters.age }}" placeholder="23 or ??"></label>
     <label>Status<input type="text" name="status" value="{{ filters.status }}" placeholder="Talking"></label>
     <label class="full">Tags<input type="text" name="tags" value="{{ filters.tags }}" placeholder="friendly, local, follow-up"></label>
@@ -57,7 +58,7 @@
                 <h2>{{ person.name }}</h2>
                 <span>{{ person.age or "??" }}</span>
             </div>
-            <div class="browse-meta">{{ person.location }}{% if person.distance %} · {{ person.distance }}{% endif %}</div>
+            <div class="browse-meta">{{ person.location }}{% if person.distance %} | {{ person.distance }}{% endif %}</div>
             <div class="browse-status">{{ person.status or "New" }}</div>
             <div class="tag-row">
                 {% for tag in (person.tags or '').split(',') if tag.strip() %}
@@ -134,3 +135,4 @@
     </article>
 </section>
 {% endblock %}
+

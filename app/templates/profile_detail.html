@@ -37,6 +37,21 @@
     </article>
 </section>
 
+<section class="card action-bar">
+    <div>
+        <h2>Automation Actions</h2>
+        <p class="helper-text">Build the profile bio from profile intake files, and build one readable conversation thread from message tracking files.</p>
+    </div>
+    <div class="page-actions">
+        <form method="post" action="/profiles/{{ person.id }}/build-bio">
+            <button type="submit">Build Bio From Intake Files</button>
+        </form>
+        <form method="post" action="/profiles/{{ person.id }}/build-conversation">
+            <button type="submit">Build Conversation Thread</button>
+        </form>
+    </div>
+</section>
+
 <section class="layout-two">
     <div class="stack-section">
         <article class="card">
@@ -186,13 +201,29 @@
         </article>
 
         <article class="card">
-            <h2>Automation Preparation</h2>
-            <p class="helper-text">The app is now split into the three intake lanes needed for future automation:</p>
-            <ul>
-                <li>`Profile screenshots and copied text` for building bios</li>
-                <li>`General photos` for browsing normal photos separately</li>
-                <li>`Message tracking` for turning screenshots and text into a readable/searchable conversation history later</li>
-            </ul>
+            <h2>Generated Bio Output</h2>
+            <p class="helper-text">This stores the latest parser output from the profile intake uploads so you can review it before editing the final profile notes.</p>
+            <pre class="text-panel">{{ person.profile_parser_output or "No generated bio output yet." }}</pre>
+        </article>
+
+        <article class="card">
+            <h2>Conversation Thread</h2>
+            <p class="helper-text">This combines message tracking files into one readable block. Use search to find specific words or names.</p>
+            <form method="get" action="/profiles/{{ person.id }}" class="stack compact-form">
+                <label>Search Conversation<input type="text" name="conversation_search" value="{{ conversation_search }}" placeholder="search messages"></label>
+                <button type="submit">Search Thread</button>
+            </form>
+            {% if conversation_search %}
+            <div class="search-results">
+                <div class="section-label">Search Results</div>
+                {% for line in conversation_results %}
+                <p>{{ line }}</p>
+                {% else %}
+                <p>No matching lines found.</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <pre class="text-panel">{{ person.conversation_thread or "No generated conversation thread yet." }}</pre>
         </article>
     </div>
 </section>
