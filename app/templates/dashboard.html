@@ -61,9 +61,12 @@
             <div class="browse-meta">{{ person.location }}{% if person.distance %} | {{ person.distance }}{% endif %}</div>
             <div class="browse-status">{{ person.status or "New" }}</div>
             <div class="tag-row">
-                {% for tag in (person.tags or '').split(',') if tag.strip() %}
-                <span class="tag-pill">{{ tag.strip() }}</span>
+                {% for tag in person.card_tags %}
+                <span class="tag-pill">{{ tag }}</span>
                 {% endfor %}
+                {% if person.extra_tag_count > 0 %}
+                <span class="tag-pill muted-pill">+{{ person.extra_tag_count }}</span>
+                {% endif %}
             </div>
         </div>
     </a>

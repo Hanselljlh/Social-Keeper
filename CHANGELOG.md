@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 - 2026-05-20
+- Tightened dashboard profile cards to a compact dating-app style layout
+- Limited card tag display to three visible tags with overflow shown as `+N`
+- Added ranked tag priorities in Settings so card tags are chosen by priority order
+- Added editable tag and status sort order fields in Settings
+
 ## 0.5.0 - 2026-05-20
 - Added profile intake parser action that builds a draft bio from profile intake uploads
 - Added stored generated bio output area on profile pages

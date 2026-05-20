@@ -20,6 +20,7 @@
             <div class="timeline-item simple-row">
                 <form method="post" action="/settings/options/{{ tag.id }}/edit" class="inline-edit">
                     <input type="text" name="value" value="{{ tag.value }}" required>
+                    <input type="number" name="sort_order" value="{{ tag.sort_order or loop.index }}" min="1" placeholder="Priority">
                     <button type="submit">Save</button>
                 </form>
                 <form method="post" action="/settings/options/{{ tag.id }}/delete">
@@ -44,6 +45,7 @@
             <div class="timeline-item simple-row">
                 <form method="post" action="/settings/options/{{ status.id }}/edit" class="inline-edit">
                     <input type="text" name="value" value="{{ status.value }}" required>
+                    <input type="number" name="sort_order" value="{{ status.sort_order or loop.index }}" min="1" placeholder="Order">
                     <button type="submit">Save</button>
                 </form>
                 <form method="post" action="/settings/options/{{ status.id }}/delete">

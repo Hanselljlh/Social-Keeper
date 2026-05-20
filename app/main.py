@@ -93,6 +93,7 @@ class SettingOption(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     kind: Mapped[str] = mapped_column(String(20))
     value: Mapped[str] = mapped_column(String(100))
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -117,6 +118,7 @@ ensure_column("upload_items", "upload_note", "TEXT")
 ensure_column("people", "reminder_date", "DATE")
 ensure_column("upload_items", "upload_category", "TEXT")
 ensure_column("upload_items", "extracted_text", "TEXT")
+ensure_column("setting_options", "sort_order", "INTEGER")
 
 app = FastAPI(title=os.getenv("APP_NAME", "Social Keeper"))
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -136,12 +138,35 @@ def app_version() -> str:
 
 
 def get_setting_values(db: Session, kind: str, fallback: list[str]) -> list[str]:
-    values = [item.value for item in db.query(SettingOption).filter(SettingOption.kind == kind).order_by(SettingOption.value.asc()).all()]
+    values = [item.value for item in get_setting_options(db, kind)]
     return values or fallback
 
 
 def get_setting_options(db: Session, kind: str) -> list[SettingOption]:
-    return db.query(SettingOption).filter(SettingOption.kind == kind).order_by(SettingOption.value.asc()).all()
+    return (
+        db.query(SettingOption)
+        .filter(SettingOption.kind == kind)
+        .order_by(SettingOption.sort_order.asc().nullslast(), SettingOption.value.asc())
+        .all()
+    )
+
+
+def next_sort_order(db: Session, kind: str) -> int:
+    existing = get_setting_options(db, kind)
+    if not existing:
+        return 1
+    return max((item.sort_order or 0) for item in existing) + 1
+
+
+def sort_profile_tags(person: Person, tag_options: list[SettingOption]) -> list[str]:
+    current_tags = parse_tags(person.tags)
+    if not current_tags:
+        return []
+    priority = {option.value.lower(): option.sort_order or 9999 for option in tag_options}
+    return sorted(
+        current_tags,
+        key=lambda tag: (priority.get(tag.lower(), 9999), tag.lower()),
+    )
 
 
 def is_logged_in(request: Request) -> bool:
@@ -403,11 +428,20 @@ def build_reminder_groups(people: list[Person]) -> dict[str, list[Person]]:
 def seed_demo_data() -> None:
     with SessionLocal() as db:
         if db.query(SettingOption).count() == 0:
-            for option in STATUS_OPTIONS:
-                db.add(SettingOption(kind="status", value=option))
-            for option in ["local", "follow-up", "verified", "favourite"]:
-                db.add(SettingOption(kind="tag", value=option))
+            for index, option in enumerate(STATUS_OPTIONS, start=1):
+                db.add(SettingOption(kind="status", value=option, sort_order=index))
+            for index, option in enumerate(["local", "follow-up", "verified", "favourite"], start=1):
+                db.add(SettingOption(kind="tag", value=option, sort_order=index))
             db.commit()
+        else:
+            changed = False
+            for kind in ["status", "tag"]:
+                for index, option in enumerate(get_setting_options(db, kind), start=1):
+                    if option.sort_order != index:
+                        option.sort_order = index
+                        changed = True
+            if changed:
+                db.commit()
 
         if db.query(Person).count() > 0:
             return
@@ -621,8 +655,11 @@ def dashboard(
     }
     with get_db() as db:
         people = apply_person_filters(db, filters)
+        tag_options = get_setting_options(db, "tag")
         for person in people:
             enrich_person(person)
+            person.card_tags = sort_profile_tags(person, tag_options)[:3]
+            person.extra_tag_count = max(0, len(parse_tags(person.tags)) - len(person.card_tags))
         duplicates = find_duplicates(people)
         reminder_groups = build_reminder_groups(people)
         totals = {
@@ -697,7 +734,7 @@ def add_setting_option(
     with get_db() as db:
         exists = db.query(SettingOption).filter(SettingOption.kind == clean_kind, SettingOption.value.ilike(clean_value)).first()
         if not exists:
-            db.add(SettingOption(kind=clean_kind, value=clean_value))
+            db.add(SettingOption(kind=clean_kind, value=clean_value, sort_order=next_sort_order(db, clean_kind)))
             db.commit()
     return RedirectResponse("/settings", status_code=302)
 
@@ -721,6 +758,7 @@ def edit_setting_option(
     request: Request,
     option_id: int,
     value: str = Form(...),
+    sort_order: str = Form(""),
 ):
     redirect = require_login(request)
     if redirect:
@@ -734,6 +772,7 @@ def edit_setting_option(
         option = db.get(SettingOption, option_id)
         if option:
             option.value = clean_value
+            option.sort_order = int(sort_order) if sort_order.strip().isdigit() else option.sort_order
             db.commit()
     return RedirectResponse("/settings", status_code=302)
 
@@ -892,7 +931,7 @@ def update_profile(
                 tags.add(new_tag.strip())
                 exists = db.query(SettingOption).filter(SettingOption.kind == "tag", SettingOption.value.ilike(new_tag.strip())).first()
                 if not exists:
-                    db.add(SettingOption(kind="tag", value=new_tag.strip()))
+                    db.add(SettingOption(kind="tag", value=new_tag.strip(), sort_order=next_sort_order(db, "tag")))
             person.tags = ", ".join(sorted(tags))
             db.commit()
     return RedirectResponse(f"/profiles/{person_id}", status_code=302)
