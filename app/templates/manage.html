@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <h1>Manage Profiles</h1>
+        <p>Bulk update profile status and tags here instead of on the main dashboard.</p>
+    </div>
+</section>
+
+<form method="post" action="/profiles/bulk-update" class="card stack">
+    <div class="bulk-toolbar">
+        <label>Status
+            <select name="bulk_status">
+                <option value="">No status change</option>
+                {% for option in status_options %}
+                <option value="{{ option }}">{{ option }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Add Tag<input type="text" name="bulk_add_tag" placeholder="follow-up"></label>
+        <button type="submit">Apply To Selected</button>
+    </div>
+    <div class="timeline">
+        {% for person in people %}
+        <label class="timeline-item checkbox-row">
+            <input type="checkbox" name="profile_ids" value="{{ person.id }}">
+            <span>{{ person.display_name }}{% if person.distance %} | {{ person.distance }}{% endif %}</span>
+        </label>
+        {% else %}
+        <p>No profiles yet.</p>
+        {% endfor %}
+    </div>
+</form>
+{% endblock %}

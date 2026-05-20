@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <h1>Settings</h1>
+        <p>Manage reusable tags and status choices.</p>
+    </div>
+</section>
+
+<section class="layout-two">
+    <article class="card stack-section">
+        <h2>Tags</h2>
+        <form method="post" action="/settings/options" class="stack">
+            <input type="hidden" name="kind" value="tag">
+            <label>New Tag<input type="text" name="value" placeholder="local" required></label>
+            <button type="submit">Add Tag</button>
+        </form>
+        <div class="timeline">
+            {% for tag in tags %}
+            <div class="timeline-item simple-row">
+                <form method="post" action="/settings/options/{{ tag.id }}/edit" class="inline-edit">
+                    <input type="text" name="value" value="{{ tag.value }}" required>
+                    <button type="submit">Save</button>
+                </form>
+                <form method="post" action="/settings/options/{{ tag.id }}/delete">
+                    <button type="submit" class="danger-button">Remove</button>
+                </form>
+            </div>
+            {% else %}
+            <p>No tags yet.</p>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="card stack-section">
+        <h2>Status Choices</h2>
+        <form method="post" action="/settings/options" class="stack">
+            <input type="hidden" name="kind" value="status">
+            <label>New Status<input type="text" name="value" placeholder="Archived" required></label>
+            <button type="submit">Add Status</button>
+        </form>
+        <div class="timeline">
+            {% for status in statuses %}
+            <div class="timeline-item simple-row">
+                <form method="post" action="/settings/options/{{ status.id }}/edit" class="inline-edit">
+                    <input type="text" name="value" value="{{ status.value }}" required>
+                    <button type="submit">Save</button>
+                </form>
+                <form method="post" action="/settings/options/{{ status.id }}/delete">
+                    <button type="submit" class="danger-button">Remove</button>
+                </form>
+            </div>
+            {% else %}
+            <p>No statuses yet.</p>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% endblock %}

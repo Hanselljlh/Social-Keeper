@@ -1,16 +1,16 @@
 # Social Keeper
 
-Private self-hosted web app for organizing social and dating conversation information.
+Private self-hosted web app for organizing social and dating contact information with structured upload lanes.
 
 ## What this first version includes
 - Login page
-- Dashboard
+- Browse-first dashboard with profile cards
 - Create profile form
 - Profile detail page
-- Upload area
-- Notes area
-- Timeline area
-- Timeline editing
+- Separate manage screen for bulk updates
+- Settings screen for reusable tags and status choices
+- Structured upload lanes
+- Profile bio and notes area
 - Profile export
 - Bulk status/tag updates
 - Duplicate profile checking
@@ -21,6 +21,12 @@ Private self-hosted web app for organizing social and dating conversation inform
 - PDF export
 - Docker Compose setup
 - External data folders
+
+## Main workflow
+- Browse profiles from the dashboard using a card view with photo, name, age, location, distance, status, and tags
+- Open a profile to manage basic info, uploads, and notes
+- Use `Manage` for bulk status/tag updates
+- Use `Settings` to add, edit, or remove reusable tags and status choices
 
 ## Before you start
 1. Copy `.env.example` to `.env`
@@ -88,3 +94,6 @@ Do not place real data inside the repo itself.
 - Local only by default
 - No third-party analytics
 - No external API use unless you add that later
+- Profiles include a `distance` field in the basic info
+- Upload lanes are split into profile intake, general photos, and message tracking
+- Message tracking uploads are stored now so future automation can turn them into a searchable conversation history

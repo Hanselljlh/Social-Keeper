@@ -44,6 +44,7 @@ class Person(Base):
     app_name: Mapped[str] = mapped_column(String(50))
     name: Mapped[str] = mapped_column(String(100))
     location: Mapped[str] = mapped_column(String(100))
+    distance: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     age: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -59,26 +60,12 @@ class Person(Base):
     initial_review_ready: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    timeline_items: Mapped[list["TimelineItem"]] = relationship(back_populates="person", cascade="all, delete-orphan")
     uploads: Mapped[list["UploadItem"]] = relationship(back_populates="person", cascade="all, delete-orphan")
-    message_items: Mapped[list["MessageItem"]] = relationship(back_populates="person", cascade="all, delete-orphan")
 
     @property
     def display_name(self) -> str:
         age_value = self.age if self.age else "??"
         return f"{self.app_name} - {self.name} - {self.location} - {age_value}"
-
-
-class TimelineItem(Base):
-    __tablename__ = "timeline_items"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    person_id: Mapped[int] = mapped_column(ForeignKey("people.id"))
-    item_type: Mapped[str] = mapped_column(String(50))
-    content: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-    person: Mapped[Person] = relationship(back_populates="timeline_items")
 
 
 class UploadItem(Base):
@@ -89,23 +76,21 @@ class UploadItem(Base):
     original_name: Mapped[str] = mapped_column(String(255))
     stored_name: Mapped[str] = mapped_column(String(255))
     content_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    upload_category: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     upload_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    extracted_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     person: Mapped[Person] = relationship(back_populates="uploads")
 
 
-class MessageItem(Base):
-    __tablename__ = "message_items"
+class SettingOption(Base):
+    __tablename__ = "setting_options"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    person_id: Mapped[int] = mapped_column(ForeignKey("people.id"))
-    bucket: Mapped[str] = mapped_column(String(20))
-    tone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    content: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(String(20))
+    value: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-    person: Mapped[Person] = relationship(back_populates="message_items")
 
 
 engine = create_engine(f"sqlite:///{DB_PATH}", future=True)
@@ -122,46 +107,36 @@ def ensure_column(table_name: str, column_name: str, definition: str) -> None:
 
 
 ensure_column("people", "review_overview", "TEXT")
+ensure_column("people", "distance", "TEXT")
 ensure_column("upload_items", "upload_note", "TEXT")
 ensure_column("people", "reminder_date", "DATE")
+ensure_column("upload_items", "upload_category", "TEXT")
+ensure_column("upload_items", "extracted_text", "TEXT")
 
 app = FastAPI(title=os.getenv("APP_NAME", "Social Keeper"))
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/media", StaticFiles(directory=UPLOADS_ROOT), name="media")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-INITIAL_OPTIONS = [
-    (
-        "general nice to meet",
-        "Hey {name}, nice meeting you on {app_name}. You seem easy to talk to. How is your day going?",
-    ),
-    (
-        "more flirty",
-        "Hey {name}, you definitely caught my attention on {app_name}. I had to say hi properly.",
-    ),
-]
-
-FOLLOW_UP_OPTIONS = [
-    (
-        "general flirty conversation",
-        "You seem fun to talk to. What kind of trouble do you usually get into when you are in a good mood?",
-    ),
-    (
-        "more direct flirty, edgy",
-        "You have that look like you know exactly how to behave and still choose not to. I like that.",
-    ),
-    (
-        "more sexually flirty with physical compliments and sexually underpinned suggestions",
-        "You have a very tempting look in your pictures. I can already tell being around you would be distracting in the best way.",
-    ),
-]
-
 STATUS_OPTIONS = ["New", "Talking", "Follow Up", "Date Planned", "Met", "Paused", "Closed"]
-TIMELINE_OPTIONS = ["message", "event", "date", "logistics", "payment", "upload received"]
+UPLOAD_CATEGORIES = {
+    "profile_intake": "Profile screenshots and copied text",
+    "general_photos": "General photos",
+    "message_tracking": "Message tracking",
+}
 
 
 def app_version() -> str:
     return VERSION_FILE.read_text(encoding="utf-8").strip()
+
+
+def get_setting_values(db: Session, kind: str, fallback: list[str]) -> list[str]:
+    values = [item.value for item in db.query(SettingOption).filter(SettingOption.kind == kind).order_by(SettingOption.value.asc()).all()]
+    return values or fallback
+
+
+def get_setting_options(db: Session, kind: str) -> list[SettingOption]:
+    return db.query(SettingOption).filter(SettingOption.kind == kind).order_by(SettingOption.value.asc()).all()
 
 
 def is_logged_in(request: Request) -> bool:
@@ -194,6 +169,13 @@ def build_review_overview(person: Person) -> str:
     return "\n".join(lines)
 
 
+def upload_groups(person: Person) -> dict[str, list[UploadItem]]:
+    grouped = {key: [] for key in UPLOAD_CATEGORIES}
+    for item in sorted(person.uploads, key=lambda entry: entry.created_at, reverse=True):
+        grouped[item.upload_category or "profile_intake"].append(item)
+    return grouped
+
+
 def parse_tags(value: Optional[str]) -> set[str]:
     if not value:
         return set()
@@ -217,7 +199,7 @@ def apply_person_filters(db: Session, filters: dict[str, str]) -> list[Person]:
             )
         )
 
-    for field in ["app_name", "name", "location", "age", "status", "tags"]:
+    for field in ["app_name", "name", "location", "distance", "age", "status", "tags"]:
         value = filters.get(field, "").strip()
         if value:
             query = query.filter(getattr(Person, field).ilike(f"%{value}%"))
@@ -264,6 +246,13 @@ def build_reminder_groups(people: list[Person]) -> dict[str, list[Person]]:
 
 def seed_demo_data() -> None:
     with SessionLocal() as db:
+        if db.query(SettingOption).count() == 0:
+            for option in STATUS_OPTIONS:
+                db.add(SettingOption(kind="status", value=option))
+            for option in ["local", "follow-up", "verified", "favourite"]:
+                db.add(SettingOption(kind="tag", value=option))
+            db.commit()
+
         if db.query(Person).count() > 0:
             return
 
@@ -271,6 +260,7 @@ def seed_demo_data() -> None:
             app_name="OKC",
             name="Annie",
             location="NBO West",
+            distance="4 km",
             age="23",
             phone="",
             status="New",
@@ -286,15 +276,6 @@ def seed_demo_data() -> None:
         )
         db.add(demo)
         db.flush()
-        db.add(TimelineItem(person_id=demo.id, item_type="message", content="Demo timeline item."))
-        db.add(
-            MessageItem(
-                person_id=demo.id,
-                bucket="draft",
-                tone="general nice to meet",
-                content="Hey Annie, nice meeting you on OKC. You seem easy to talk to.",
-            )
-        )
         db.commit()
 
 
@@ -302,14 +283,15 @@ seed_demo_data()
 
 
 def enrich_person(person: Person) -> None:
-    person.timeline_items.sort(key=lambda item: item.created_at, reverse=True)
     person.uploads.sort(key=lambda item: item.created_at, reverse=True)
-    person.message_items.sort(key=lambda item: item.created_at, reverse=True)
-    person.initial_message_items = [item for item in person.message_items if item.bucket == "initial"]
-    person.followup_message_items = [item for item in person.message_items if item.bucket == "follow_up"]
-    person.saved_drafts = [item for item in person.message_items if item.bucket == "draft"]
-    person.sent_history = [item for item in person.message_items if item.bucket == "sent"]
-    person.review_overview_display = person.review_overview if person.initial_review_ready else ""
+    person.upload_groups = upload_groups(person)
+    general = person.upload_groups.get("general_photos", [])
+    intake = person.upload_groups.get("profile_intake", [])
+    person.primary_photo = None
+    for item in general + intake:
+        if item.content_type and item.content_type.startswith("image/"):
+            person.primary_photo = item
+            break
 
 
 def build_profile_export(person: Person) -> str:
@@ -322,6 +304,9 @@ def build_profile_export(person: Person) -> str:
         "",
         "Summary",
         person.summary or "None",
+        "",
+        "Bio Builder Source",
+        "Use profile screenshots and copied text to build a clean profile bio.",
         "",
         "Private Notes",
         person.notes or "None",
@@ -338,19 +323,14 @@ def build_profile_export(person: Person) -> str:
         "Follow-up Reminders",
         person.reminders or "None",
         "",
-        "Structured Overview",
-        person.review_overview or "Not ready",
-        "",
-        "Timeline",
+        "Uploads",
     ]
-    for item in person.timeline_items:
-        lines.append(f"- [{item.created_at.strftime('%Y-%m-%d %H:%M')}] {item.item_type}: {item.content}")
-    lines.extend(["", "Messages"])
-    for item in person.message_items:
-        lines.append(f"- [{item.created_at.strftime('%Y-%m-%d %H:%M')}] {item.bucket} / {item.tone or 'no label'}: {item.content}")
-    lines.extend(["", "Uploads"])
     for item in person.uploads:
-        lines.append(f"- [{item.created_at.strftime('%Y-%m-%d %H:%M')}] {item.original_name} | {item.upload_note or 'no note'}")
+        lines.append(
+            f"- [{item.created_at.strftime('%Y-%m-%d %H:%M')}] {(item.upload_category or 'profile_intake')} | {item.original_name} | {item.upload_note or 'no note'}"
+        )
+        if item.extracted_text:
+            lines.append(f"  Extracted Text: {item.extracted_text}")
     return "\n".join(lines)
 
 
@@ -409,15 +389,8 @@ def merge_people(db: Session, source: Person, target: Person) -> None:
         target.reminders = source.reminders
     if not target.reminder_date and source.reminder_date:
         target.reminder_date = source.reminder_date
-    if source.initial_review_ready and not target.initial_review_ready:
-        target.initial_review_ready = True
-        target.review_overview = source.review_overview
 
-    for item in source.timeline_items:
-        item.person_id = target.id
     for item in source.uploads:
-        item.person_id = target.id
-    for item in source.message_items:
         item.person_id = target.id
     db.delete(source)
 
@@ -480,12 +453,15 @@ def dashboard(
     }
     with get_db() as db:
         people = apply_person_filters(db, filters)
+        for person in people:
+            enrich_person(person)
         duplicates = find_duplicates(people)
         reminder_groups = build_reminder_groups(people)
         totals = {
             "count": len(people),
-            "ready": sum(1 for person in people if person.initial_review_ready),
-            "needs_review": sum(1 for person in people if not person.initial_review_ready),
+            "profile_intake": sum(1 for person in people for upload in person.uploads if (upload.upload_category or "profile_intake") == "profile_intake"),
+            "general_photos": sum(1 for person in people for upload in person.uploads if (upload.upload_category or "") == "general_photos"),
+            "message_tracking": sum(1 for person in people for upload in person.uploads if (upload.upload_category or "") == "message_tracking"),
             "uploads": sum(len(person.uploads) for person in people),
         }
     return templates.TemplateResponse(
@@ -501,6 +477,97 @@ def dashboard(
             "version": app_version(),
         },
     )
+
+
+@app.get("/manage", response_class=HTMLResponse)
+def manage_page(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    with get_db() as db:
+        people = db.query(Person).order_by(Person.created_at.desc()).all()
+        status_options = get_setting_values(db, "status", STATUS_OPTIONS)
+    return templates.TemplateResponse(
+        request=request,
+        name="manage.html",
+        context={"people": people, "status_options": status_options, "version": app_version()},
+    )
+
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    with get_db() as db:
+        tags = get_setting_options(db, "tag")
+        statuses = get_setting_options(db, "status")
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={"tags": tags, "statuses": statuses, "version": app_version()},
+    )
+
+
+@app.post("/settings/options")
+def add_setting_option(
+    request: Request,
+    kind: str = Form(...),
+    value: str = Form(...),
+):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    clean_kind = kind.strip()
+    clean_value = value.strip()
+    if clean_kind not in {"tag", "status"} or not clean_value:
+        return RedirectResponse("/settings", status_code=302)
+
+    with get_db() as db:
+        exists = db.query(SettingOption).filter(SettingOption.kind == clean_kind, SettingOption.value.ilike(clean_value)).first()
+        if not exists:
+            db.add(SettingOption(kind=clean_kind, value=clean_value))
+            db.commit()
+    return RedirectResponse("/settings", status_code=302)
+
+
+@app.post("/settings/options/{option_id}/delete")
+def delete_setting_option(request: Request, option_id: int):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    with get_db() as db:
+        option = db.get(SettingOption, option_id)
+        if option:
+            db.delete(option)
+            db.commit()
+    return RedirectResponse("/settings", status_code=302)
+
+
+@app.post("/settings/options/{option_id}/edit")
+def edit_setting_option(
+    request: Request,
+    option_id: int,
+    value: str = Form(...),
+):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    clean_value = value.strip()
+    if not clean_value:
+        return RedirectResponse("/settings", status_code=302)
+
+    with get_db() as db:
+        option = db.get(SettingOption, option_id)
+        if option:
+            option.value = clean_value
+            db.commit()
+    return RedirectResponse("/settings", status_code=302)
 
 
 @app.post("/profiles/bulk-update")
@@ -551,15 +618,40 @@ def merge_profiles(
     return RedirectResponse("/dashboard", status_code=302)
 
 
+@app.post("/uploads/{upload_id}/metadata")
+def update_upload_metadata(
+    request: Request,
+    upload_id: int,
+    upload_note: str = Form(""),
+    extracted_text: str = Form(""),
+):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    with get_db() as db:
+        upload = db.get(UploadItem, upload_id)
+        if not upload:
+            return RedirectResponse("/dashboard", status_code=302)
+        upload.upload_note = upload_note.strip()
+        upload.extracted_text = extracted_text.strip()
+        person_id = upload.person_id
+        db.commit()
+    return RedirectResponse(f"/profiles/{person_id}", status_code=302)
+
+
 @app.get("/profiles/new", response_class=HTMLResponse)
 def new_profile(request: Request):
     redirect = require_login(request)
     if redirect:
         return redirect
+    with get_db() as db:
+        status_options = get_setting_values(db, "status", STATUS_OPTIONS)
+        tag_options = get_setting_values(db, "tag", [])
     return templates.TemplateResponse(
         request=request,
         name="new_profile.html",
-        context={"version": app_version(), "status_options": STATUS_OPTIONS},
+        context={"version": app_version(), "status_options": status_options, "tag_options": tag_options},
     )
 
 
@@ -569,10 +661,11 @@ def create_profile(
     app_name: str = Form(...),
     name: str = Form(...),
     location: str = Form(...),
+    distance: str = Form(""),
     age: str = Form("??"),
     phone: str = Form(""),
     status: str = Form("New"),
-    tags: str = Form(""),
+    selected_tags: list[str] = Form([]),
     notes: str = Form(""),
 ):
     redirect = require_login(request)
@@ -585,10 +678,11 @@ def create_profile(
             app_name=app_name.strip(),
             name=name.strip(),
             location=location.strip(),
+            distance=distance.strip(),
             age=clean_age,
             phone=phone.strip(),
             status=status.strip() or "New",
-            tags=tags.strip(),
+            tags=", ".join(sorted({tag.strip() for tag in selected_tags if tag.strip()})),
             notes=notes.strip(),
         )
         db.add(person)
@@ -604,10 +698,12 @@ def update_profile(
     app_name: str = Form(...),
     name: str = Form(...),
     location: str = Form(...),
+    distance: str = Form(""),
     age: str = Form("??"),
     phone: str = Form(""),
     status: str = Form("New"),
-    tags: str = Form(""),
+    selected_tags: list[str] = Form([]),
+    new_tag: str = Form(""),
 ):
     redirect = require_login(request)
     if redirect:
@@ -619,10 +715,17 @@ def update_profile(
             person.app_name = app_name.strip()
             person.name = name.strip()
             person.location = location.strip()
+            person.distance = distance.strip()
             person.age = age.strip() or "??"
             person.phone = phone.strip()
             person.status = status.strip() or "New"
-            person.tags = tags.strip()
+            tags = {tag.strip() for tag in selected_tags if tag.strip()}
+            if new_tag.strip():
+                tags.add(new_tag.strip())
+                exists = db.query(SettingOption).filter(SettingOption.kind == "tag", SettingOption.value.ilike(new_tag.strip())).first()
+                if not exists:
+                    db.add(SettingOption(kind="tag", value=new_tag.strip()))
+            person.tags = ", ".join(sorted(tags))
             db.commit()
     return RedirectResponse(f"/profiles/{person_id}", status_code=302)
 
@@ -638,18 +741,17 @@ def profile_detail(request: Request, person_id: int):
         if not person:
             return RedirectResponse("/dashboard", status_code=302)
         enrich_person(person)
-        initial_options = [(tone, content.format(name=person.name, app_name=person.app_name)) for tone, content in INITIAL_OPTIONS]
-        follow_up_options = [(tone, content.format(name=person.name, app_name=person.app_name)) for tone, content in FOLLOW_UP_OPTIONS]
+        status_options = get_setting_values(db, "status", STATUS_OPTIONS)
+        tag_options = get_setting_values(db, "tag", [])
         return templates.TemplateResponse(
             request=request,
             name="profile_detail.html",
             context={
                 "person": person,
                 "version": app_version(),
-                "status_options": STATUS_OPTIONS,
-                "timeline_options": TIMELINE_OPTIONS,
-                "initial_options": initial_options,
-                "follow_up_options": follow_up_options,
+                "status_options": status_options,
+                "tag_options": tag_options,
+                "upload_categories": UPLOAD_CATEGORIES,
             },
         )
 
@@ -665,7 +767,6 @@ def update_notes(
     boundaries: str = Form(""),
     reminders: str = Form(""),
     reminder_date: str = Form(""),
-    initial_review_ready: str = Form("false"),
 ):
     redirect = require_login(request)
     if redirect:
@@ -681,87 +782,6 @@ def update_notes(
             person.boundaries = boundaries
             person.reminders = reminders
             person.reminder_date = datetime.strptime(reminder_date, "%Y-%m-%d").date() if reminder_date else None
-            person.initial_review_ready = initial_review_ready == "true"
-            person.review_overview = build_review_overview(person) if person.initial_review_ready else ""
-            db.commit()
-    return RedirectResponse(f"/profiles/{person_id}", status_code=302)
-
-
-@app.post("/profiles/{person_id}/timeline")
-def add_timeline_item(
-    request: Request,
-    person_id: int,
-    item_type: str = Form(...),
-    content: str = Form(...),
-):
-    redirect = require_login(request)
-    if redirect:
-        return redirect
-
-    with get_db() as db:
-        person = db.get(Person, person_id)
-        if person and content.strip():
-            db.add(TimelineItem(person_id=person_id, item_type=item_type.strip(), content=content.strip()))
-            db.commit()
-    return RedirectResponse(f"/profiles/{person_id}", status_code=302)
-
-
-@app.post("/profiles/{person_id}/timeline/{timeline_id}/edit")
-def edit_timeline_item(
-    request: Request,
-    person_id: int,
-    timeline_id: int,
-    item_type: str = Form(...),
-    content: str = Form(...),
-):
-    redirect = require_login(request)
-    if redirect:
-        return redirect
-
-    with get_db() as db:
-        item = db.get(TimelineItem, timeline_id)
-        if item and item.person_id == person_id:
-            item.item_type = item_type.strip()
-            item.content = content.strip()
-            db.commit()
-    return RedirectResponse(f"/profiles/{person_id}", status_code=302)
-
-
-@app.post("/profiles/{person_id}/timeline/{timeline_id}/delete")
-def delete_timeline_item(request: Request, person_id: int, timeline_id: int):
-    redirect = require_login(request)
-    if redirect:
-        return redirect
-
-    with get_db() as db:
-        item = db.get(TimelineItem, timeline_id)
-        if item and item.person_id == person_id:
-            db.delete(item)
-            db.commit()
-    return RedirectResponse(f"/profiles/{person_id}", status_code=302)
-
-
-@app.post("/profiles/{person_id}/messages")
-def add_message_item(
-    request: Request,
-    person_id: int,
-    bucket: str = Form(...),
-    tone: str = Form(""),
-    content: str = Form(...),
-):
-    redirect = require_login(request)
-    if redirect:
-        return redirect
-
-    if bucket not in {"initial", "follow_up", "draft", "sent"}:
-        return RedirectResponse(f"/profiles/{person_id}", status_code=302)
-
-    with get_db() as db:
-        person = db.get(Person, person_id)
-        if person and content.strip():
-            db.add(MessageItem(person_id=person_id, bucket=bucket, tone=tone.strip(), content=content.strip()))
-            if bucket == "sent":
-                db.add(TimelineItem(person_id=person_id, item_type="message", content=f"Sent message: {content.strip()}"))
             db.commit()
     return RedirectResponse(f"/profiles/{person_id}", status_code=302)
 
@@ -771,6 +791,7 @@ async def upload_file(
     request: Request,
     person_id: int,
     uploaded_file: UploadFile = File(...),
+    upload_category: str = Form("profile_intake"),
     upload_note: str = Form(""),
 ):
     redirect = require_login(request)
@@ -780,6 +801,7 @@ async def upload_file(
     with get_db() as db:
         person = db.get(Person, person_id)
         if person and uploaded_file.filename:
+            chosen_category = upload_category if upload_category in UPLOAD_CATEGORIES else "profile_intake"
             person_folder = UPLOADS_ROOT / str(person_id)
             person_folder.mkdir(parents=True, exist_ok=True)
             safe_name = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}-{uploaded_file.filename}"
@@ -792,14 +814,8 @@ async def upload_file(
                     original_name=uploaded_file.filename,
                     stored_name=f"{person_id}/{safe_name}",
                     content_type=uploaded_file.content_type,
+                    upload_category=chosen_category,
                     upload_note=upload_note.strip(),
-                )
-            )
-            db.add(
-                TimelineItem(
-                    person_id=person_id,
-                    item_type="upload received",
-                    content=f"Upload received: {uploaded_file.filename}",
                 )
             )
             db.commit()

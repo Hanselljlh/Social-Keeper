@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 - 2026-05-20
+## 0.4.0 - 2026-05-20
 - Added dashboard search and filters for app, name, location, age, status, and tags
 - Added editable profile details layout with stronger mobile-friendly sections
 - Added Initial Review Ready workflow with structured overview output
@@ -15,6 +15,13 @@
 - Added real reminder dates for profiles
 - Added duplicate merge action from the dashboard
 - Added PDF export for profile summaries
+- Removed timeline, review, suggested message, and sent message workflow from the UI
+- Reworked uploads into profile intake, general photos, and message tracking lanes
+- Added per-upload metadata fields for copied or extracted text to support future automation
+- Moved bulk profile updates to a separate Manage screen
+- Rebuilt the dashboard into a browse-first card layout with photo, name, age, location, distance, status, and tags
+- Added distance as a profile field in create, edit, browse, and manage views
+- Added Settings editing for tags and status choices, not just add/remove
 
 ## 0.1.0 - 2026-05-20
 - Initial project setup

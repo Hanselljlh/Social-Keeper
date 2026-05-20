@@ -7,7 +7,7 @@
     </div>
     <div class="page-actions">
         <form method="post" action="/profiles/{{ person.id }}/export">
-            <button type="submit">Export Profile</button>
+            <button type="submit">Export Text</button>
         </form>
         <form method="post" action="/profiles/{{ person.id }}/export-zip">
             <button type="submit">Export ZIP Bundle</button>
@@ -15,28 +15,25 @@
         <form method="post" action="/profiles/{{ person.id }}/export-pdf">
             <button type="submit">Export PDF</button>
         </form>
-        <div class="{{ 'ready-badge' if person.initial_review_ready else 'pending-badge' }}">
-            {{ "Initial Review Ready" if person.initial_review_ready else "Not Ready For Initial Review" }}
-        </div>
     </div>
 </section>
 
 <section class="stats-grid">
     <article class="card stat-card">
-        <div class="stat-label">Uploads</div>
+        <div class="stat-label">All Uploads</div>
         <div class="stat-value">{{ person.uploads|length }}</div>
     </article>
     <article class="card stat-card">
-        <div class="stat-label">Timeline Items</div>
-        <div class="stat-value">{{ person.timeline_items|length }}</div>
+        <div class="stat-label">Profile Intake</div>
+        <div class="stat-value">{{ person.upload_groups.profile_intake|length }}</div>
     </article>
     <article class="card stat-card">
-        <div class="stat-label">Saved Drafts</div>
-        <div class="stat-value">{{ person.saved_drafts|length }}</div>
+        <div class="stat-label">General Photos</div>
+        <div class="stat-value">{{ person.upload_groups.general_photos|length }}</div>
     </article>
     <article class="card stat-card">
-        <div class="stat-label">Sent Messages</div>
-        <div class="stat-value">{{ person.sent_history|length }}</div>
+        <div class="stat-label">Message Tracking</div>
+        <div class="stat-value">{{ person.upload_groups.message_tracking|length }}</div>
     </article>
 </section>
 
@@ -48,6 +45,7 @@
                 <label>App<input type="text" name="app_name" value="{{ person.app_name }}" required></label>
                 <label>Name<input type="text" name="name" value="{{ person.name }}" required></label>
                 <label>Location<input type="text" name="location" value="{{ person.location }}" required></label>
+                <label>Distance<input type="text" name="distance" value="{{ person.distance or '' }}"></label>
                 <label>Age<input type="text" name="age" value="{{ person.age or '??' }}"></label>
                 <label>Phone / WhatsApp<input type="text" name="phone" value="{{ person.phone or '' }}"></label>
                 <label>Status
@@ -57,72 +55,83 @@
                         {% endfor %}
                     </select>
                 </label>
-                <label class="full">Tags<input type="text" name="tags" value="{{ person.tags or '' }}"></label>
+                <div class="full">
+                    <div class="section-label">Tags</div>
+                    <div class="checkbox-grid">
+                        {% set current_tags = (person.tags or '').split(',') %}
+                        {% for tag in tag_options %}
+                        <label class="checkbox-row">
+                            <input type="checkbox" name="selected_tags" value="{{ tag }}" {% if tag in current_tags %}checked{% endif %}>
+                            {{ tag }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <label>Add New Tag<input type="text" name="new_tag" placeholder="new tag from profile"></label>
+                </div>
                 <button type="submit">Update Profile</button>
             </form>
         </article>
 
         <article class="card">
-            <h2>Uploads</h2>
-            <p class="helper-text">On upload, the app only records that the file was received. No initial review is shown until you mark the profile ready.</p>
+            <h2>Profile Intake Uploads</h2>
+            <p class="helper-text">Use this for dating profile screenshots and copied text from the profile. This is the source material for future bio automation.</p>
             <form method="post" action="/profiles/{{ person.id }}/uploads" enctype="multipart/form-data" class="stack">
+                <input type="hidden" name="upload_category" value="profile_intake">
                 <input type="file" name="uploaded_file" required>
-                <label>Upload Note<textarea name="upload_note" rows="2" placeholder="Optional note for this file"></textarea></label>
-                <button type="submit">Upload File</button>
+                <label>Note<textarea name="upload_note" rows="2" placeholder="What this profile file contains"></textarea></label>
+                <button type="submit">Add Profile Intake File</button>
             </form>
             <div class="thumb-grid">
-                {% for item in person.uploads %}
-                <a href="/uploads/{{ item.stored_name }}" target="_blank" class="thumb-card">
-                    {% if item.content_type and item.content_type.startswith("image/") %}
-                    <img src="/uploads/{{ item.stored_name }}" alt="{{ item.original_name }}" class="thumb-image">
-                    {% else %}
-                    <div class="thumb-preview">{{ item.original_name.split(".")[-1].upper() }}</div>
-                    {% endif %}
+                {% for item in person.upload_groups.profile_intake %}
+                <article class="thumb-card">
+                    <a href="/uploads/{{ item.stored_name }}" target="_blank">
+                        {% if item.content_type and item.content_type.startswith("image/") %}
+                        <img src="/uploads/{{ item.stored_name }}" alt="{{ item.original_name }}" class="thumb-image">
+                        {% else %}
+                        <div class="thumb-preview">{{ item.original_name.split(".")[-1].upper() }}</div>
+                        {% endif %}
+                    </a>
                     <div class="thumb-title">{{ item.original_name }}</div>
-                    <div class="timeline-date">{{ item.upload_note or "Upload received" }}</div>
-                </a>
+                    <form method="post" action="/uploads/{{ item.id }}/metadata" class="stack compact-form">
+                        <label>Note<textarea name="upload_note" rows="2">{{ item.upload_note or "" }}</textarea></label>
+                        <label>Copied / Extracted Text<textarea name="extracted_text" rows="4">{{ item.extracted_text or "" }}</textarea></label>
+                        <button type="submit">Save Metadata</button>
+                    </form>
+                </article>
                 {% else %}
-                <p>No uploads yet.</p>
+                <p>No profile intake files yet.</p>
                 {% endfor %}
             </div>
         </article>
 
         <article class="card">
-            <h2>Timeline</h2>
-            <form method="post" action="/profiles/{{ person.id }}/timeline" class="stack">
-                <label>Type
-                    <select name="item_type">
-                        {% for option in timeline_options %}
-                        <option value="{{ option }}">{{ option.title() }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>Details<textarea name="content" rows="4" required></textarea></label>
-                <button type="submit">Add Timeline Item</button>
+            <h2>General Photos</h2>
+            <p class="helper-text">Use this for normal photos of them only. Keep this section easy to browse.</p>
+            <form method="post" action="/profiles/{{ person.id }}/uploads" enctype="multipart/form-data" class="stack">
+                <input type="hidden" name="upload_category" value="general_photos">
+                <input type="file" name="uploaded_file" required>
+                <label>Note<textarea name="upload_note" rows="2" placeholder="Optional photo note"></textarea></label>
+                <button type="submit">Add General Photo</button>
             </form>
-            <div class="timeline">
-                {% for item in person.timeline_items %}
-                <div class="timeline-item">
-                    <form method="post" action="/profiles/{{ person.id }}/timeline/{{ item.id }}/edit" class="stack">
-                        <label>Type
-                            <select name="item_type">
-                                {% for option in timeline_options %}
-                                <option value="{{ option }}" {% if item.item_type == option %}selected{% endif %}>{{ option.title() }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-                        <label>Details<textarea name="content" rows="3" required>{{ item.content }}</textarea></label>
-                        <div class="timeline-actions">
-                            <div class="timeline-date">{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
-                            <button type="submit">Save</button>
-                        </div>
+            <div class="thumb-grid">
+                {% for item in person.upload_groups.general_photos %}
+                <article class="thumb-card">
+                    <a href="/uploads/{{ item.stored_name }}" target="_blank">
+                        {% if item.content_type and item.content_type.startswith("image/") %}
+                        <img src="/uploads/{{ item.stored_name }}" alt="{{ item.original_name }}" class="thumb-image">
+                        {% else %}
+                        <div class="thumb-preview">{{ item.original_name.split(".")[-1].upper() }}</div>
+                        {% endif %}
+                    </a>
+                    <div class="thumb-title">{{ item.original_name }}</div>
+                    <form method="post" action="/uploads/{{ item.id }}/metadata" class="stack compact-form">
+                        <label>Note<textarea name="upload_note" rows="2">{{ item.upload_note or "" }}</textarea></label>
+                        <label>Extra Text<textarea name="extracted_text" rows="3">{{ item.extracted_text or "" }}</textarea></label>
+                        <button type="submit">Save Metadata</button>
                     </form>
-                    <form method="post" action="/profiles/{{ person.id }}/timeline/{{ item.id }}/delete">
-                        <button type="submit" class="danger-button">Delete</button>
-                    </form>
-                </div>
+                </article>
                 {% else %}
-                <p>No timeline items yet.</p>
+                <p>No general photos yet.</p>
                 {% endfor %}
             </div>
         </article>
@@ -130,102 +139,60 @@
 
     <div class="stack-section">
         <article class="card">
-            <h2>Notes and Review</h2>
+            <h2>Message Tracking Files</h2>
+            <p class="helper-text">Use this for `.txt` files and screenshots from the live conversation. This is the source material for future searchable conversation automation across dating app and WhatsApp.</p>
+            <form method="post" action="/profiles/{{ person.id }}/uploads" enctype="multipart/form-data" class="stack">
+                <input type="hidden" name="upload_category" value="message_tracking">
+                <input type="file" name="uploaded_file" required>
+                <label>Note<textarea name="upload_note" rows="2" placeholder="Where this conversation file came from"></textarea></label>
+                <button type="submit">Add Message Tracking File</button>
+            </form>
+            <div class="thumb-grid">
+                {% for item in person.upload_groups.message_tracking %}
+                <article class="thumb-card">
+                    <a href="/uploads/{{ item.stored_name }}" target="_blank">
+                        {% if item.content_type and item.content_type.startswith("image/") %}
+                        <img src="/uploads/{{ item.stored_name }}" alt="{{ item.original_name }}" class="thumb-image">
+                        {% else %}
+                        <div class="thumb-preview">{{ item.original_name.split(".")[-1].upper() }}</div>
+                        {% endif %}
+                    </a>
+                    <div class="thumb-title">{{ item.original_name }}</div>
+                    <form method="post" action="/uploads/{{ item.id }}/metadata" class="stack compact-form">
+                        <label>Note<textarea name="upload_note" rows="2">{{ item.upload_note or "" }}</textarea></label>
+                        <label>Copied / Extracted Text<textarea name="extracted_text" rows="5">{{ item.extracted_text or "" }}</textarea></label>
+                        <button type="submit">Save Metadata</button>
+                    </form>
+                </article>
+                {% else %}
+                <p>No message tracking files yet.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card">
+            <h2>Profile Bio</h2>
+            <p class="helper-text">This is the clean profile summary you want to keep about the person. Later automation can fill this from profile screenshots and copied text.</p>
             <form method="post" action="/profiles/{{ person.id }}/notes" class="stack">
+                <label>Summary / Bio<textarea name="summary" rows="4">{{ person.summary or "" }}</textarea></label>
                 <label>Private Notes<textarea name="notes" rows="4">{{ person.notes or "" }}</textarea></label>
-                <label>Summary / Overview<textarea name="summary" rows="3">{{ person.summary or "" }}</textarea></label>
                 <label>Red Flags<textarea name="red_flags" rows="3">{{ person.red_flags or "" }}</textarea></label>
                 <label>Green Flags<textarea name="green_flags" rows="3">{{ person.green_flags or "" }}</textarea></label>
                 <label>Boundaries<textarea name="boundaries" rows="3">{{ person.boundaries or "" }}</textarea></label>
                 <label>Follow-up Reminders<textarea name="reminders" rows="3">{{ person.reminders or "" }}</textarea></label>
                 <label>Reminder Date<input type="date" name="reminder_date" value="{{ person.reminder_date.isoformat() if person.reminder_date else '' }}"></label>
-                <label>Initial Review Ready
-                    <select name="initial_review_ready">
-                        <option value="false" {% if not person.initial_review_ready %}selected{% endif %}>Not Ready</option>
-                        <option value="true" {% if person.initial_review_ready %}selected{% endif %}>Ready</option>
-                    </select>
-                </label>
-                <button type="submit">Save Notes</button>
+                <button type="submit">Save Profile Notes</button>
             </form>
         </article>
 
         <article class="card">
-            <h2>Structured Overview</h2>
-            {% if person.initial_review_ready %}
-            <pre class="overview-box">{{ person.review_overview_display }}</pre>
-            {% else %}
-            <p class="helper-text">Uploads and notes can be collected now. The structured overview will appear only after you set the profile to Initial Review Ready.</p>
-            {% endif %}
-        </article>
-
-        <article class="card">
-            <h2>Message Help</h2>
-            <div class="message-columns">
-                <div class="message-column">
-                    <h3>Initial Text Starters</h3>
-                    {% for tone, suggestion in initial_options %}
-                    <form method="post" action="/profiles/{{ person.id }}/messages" class="message-form">
-                        <input type="hidden" name="bucket" value="initial">
-                        <input type="hidden" name="tone" value="{{ tone }}">
-                        <label>{{ tone|title }}<textarea name="content" rows="3">{{ suggestion }}</textarea></label>
-                        <button type="submit">Save Initial Option</button>
-                    </form>
-                    {% endfor %}
-                </div>
-                <div class="message-column">
-                    <h3>Follow-Up Text</h3>
-                    {% for tone, suggestion in follow_up_options %}
-                    <form method="post" action="/profiles/{{ person.id }}/messages" class="message-form">
-                        <input type="hidden" name="bucket" value="follow_up">
-                        <input type="hidden" name="tone" value="{{ tone }}">
-                        <label>{{ tone|title }}<textarea name="content" rows="4">{{ suggestion }}</textarea></label>
-                        <button type="submit">Save Follow-Up Option</button>
-                    </form>
-                    {% endfor %}
-                </div>
-            </div>
-        </article>
-
-        <article class="card">
-            <h2>Saved Drafts</h2>
-            <form method="post" action="/profiles/{{ person.id }}/messages" class="stack">
-                <input type="hidden" name="bucket" value="draft">
-                <label>Draft Label<input type="text" name="tone" placeholder="saved draft"></label>
-                <label>Draft Text<textarea name="content" rows="4" required></textarea></label>
-                <button type="submit">Save Draft</button>
-            </form>
-            <div class="timeline">
-                {% for item in person.saved_drafts %}
-                <div class="timeline-item">
-                    <div class="timeline-type">{{ item.tone or "saved draft" }}</div>
-                    <div>{{ item.content }}</div>
-                    <div class="timeline-date">{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
-                </div>
-                {% else %}
-                <p>No saved drafts yet.</p>
-                {% endfor %}
-            </div>
-        </article>
-
-        <article class="card">
-            <h2>Sent Message History</h2>
-            <form method="post" action="/profiles/{{ person.id }}/messages" class="stack">
-                <input type="hidden" name="bucket" value="sent">
-                <label>Label<input type="text" name="tone" placeholder="sent message"></label>
-                <label>Message Text<textarea name="content" rows="4" required></textarea></label>
-                <button type="submit">Add Sent Message</button>
-            </form>
-            <div class="timeline">
-                {% for item in person.sent_history %}
-                <div class="timeline-item">
-                    <div class="timeline-type">{{ item.tone or "sent message" }}</div>
-                    <div>{{ item.content }}</div>
-                    <div class="timeline-date">{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
-                </div>
-                {% else %}
-                <p>No sent messages yet.</p>
-                {% endfor %}
-            </div>
+            <h2>Automation Preparation</h2>
+            <p class="helper-text">The app is now split into the three intake lanes needed for future automation:</p>
+            <ul>
+                <li>`Profile screenshots and copied text` for building bios</li>
+                <li>`General photos` for browsing normal photos separately</li>
+                <li>`Message tracking` for turning screenshots and text into a readable/searchable conversation history later</li>
+            </ul>
         </article>
     </div>
 </section>

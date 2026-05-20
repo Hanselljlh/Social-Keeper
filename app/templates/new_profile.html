@@ -11,6 +11,7 @@
     <label>App<input type="text" name="app_name" placeholder="OKC" required></label>
     <label>Name<input type="text" name="name" placeholder="Annie" required></label>
     <label>Location<input type="text" name="location" placeholder="NBO West" required></label>
+    <label>Distance<input type="text" name="distance" placeholder="4 km"></label>
     <label>Age<input type="text" name="age" placeholder="23 or ??"></label>
     <label>Phone / WhatsApp<input type="text" name="phone"></label>
     <label>Status
@@ -20,7 +21,14 @@
             {% endfor %}
         </select>
     </label>
-    <label class="full">Tags<input type="text" name="tags" placeholder="funny, active, local"></label>
+    <div class="full">
+        <div class="section-label">Tags</div>
+        <div class="checkbox-grid">
+            {% for tag in tag_options %}
+            <label class="checkbox-row"><input type="checkbox" name="selected_tags" value="{{ tag }}"> {{ tag }}</label>
+            {% endfor %}
+        </div>
+    </div>
     <label class="full">Private Notes<textarea name="notes" rows="5" placeholder="Private notes only"></textarea></label>
     <button type="submit">Save Profile</button>
 </form>
