@@ -5,30 +5,81 @@
         <h1>{{ person.display_name }}</h1>
         <p>{{ person.phone or "No phone saved" }} | {{ person.status or "New" }}</p>
     </div>
+    <div class="page-actions">
+        <form method="post" action="/profiles/{{ person.id }}/export">
+            <button type="submit">Export Profile</button>
+        </form>
+        <form method="post" action="/profiles/{{ person.id }}/export-zip">
+            <button type="submit">Export ZIP Bundle</button>
+        </form>
+        <form method="post" action="/profiles/{{ person.id }}/export-pdf">
+            <button type="submit">Export PDF</button>
+        </form>
+        <div class="{{ 'ready-badge' if person.initial_review_ready else 'pending-badge' }}">
+            {{ "Initial Review Ready" if person.initial_review_ready else "Not Ready For Initial Review" }}
+        </div>
+    </div>
+</section>
+
+<section class="stats-grid">
+    <article class="card stat-card">
+        <div class="stat-label">Uploads</div>
+        <div class="stat-value">{{ person.uploads|length }}</div>
+    </article>
+    <article class="card stat-card">
+        <div class="stat-label">Timeline Items</div>
+        <div class="stat-value">{{ person.timeline_items|length }}</div>
+    </article>
+    <article class="card stat-card">
+        <div class="stat-label">Saved Drafts</div>
+        <div class="stat-value">{{ person.saved_drafts|length }}</div>
+    </article>
+    <article class="card stat-card">
+        <div class="stat-label">Sent Messages</div>
+        <div class="stat-value">{{ person.sent_history|length }}</div>
+    </article>
 </section>
 
 <section class="layout-two">
     <div class="stack-section">
         <article class="card">
-            <h2>Profile Details</h2>
-            <p><strong>App:</strong> {{ person.app_name }}</p>
-            <p><strong>Name:</strong> {{ person.name }}</p>
-            <p><strong>Location:</strong> {{ person.location }}</p>
-            <p><strong>Age:</strong> {{ person.age or "??" }}</p>
-            <p><strong>Tags:</strong> {{ person.tags or "None" }}</p>
+            <h2>Basic Details</h2>
+            <form method="post" action="/profiles/{{ person.id }}/edit" class="form-grid">
+                <label>App<input type="text" name="app_name" value="{{ person.app_name }}" required></label>
+                <label>Name<input type="text" name="name" value="{{ person.name }}" required></label>
+                <label>Location<input type="text" name="location" value="{{ person.location }}" required></label>
+                <label>Age<input type="text" name="age" value="{{ person.age or '??' }}"></label>
+                <label>Phone / WhatsApp<input type="text" name="phone" value="{{ person.phone or '' }}"></label>
+                <label>Status
+                    <select name="status">
+                        {% for option in status_options %}
+                        <option value="{{ option }}" {% if (person.status or "New") == option %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="full">Tags<input type="text" name="tags" value="{{ person.tags or '' }}"></label>
+                <button type="submit">Update Profile</button>
+            </form>
         </article>
 
         <article class="card">
             <h2>Uploads</h2>
+            <p class="helper-text">On upload, the app only records that the file was received. No initial review is shown until you mark the profile ready.</p>
             <form method="post" action="/profiles/{{ person.id }}/uploads" enctype="multipart/form-data" class="stack">
                 <input type="file" name="uploaded_file" required>
+                <label>Upload Note<textarea name="upload_note" rows="2" placeholder="Optional note for this file"></textarea></label>
                 <button type="submit">Upload File</button>
             </form>
             <div class="thumb-grid">
                 {% for item in person.uploads %}
                 <a href="/uploads/{{ item.stored_name }}" target="_blank" class="thumb-card">
+                    {% if item.content_type and item.content_type.startswith("image/") %}
+                    <img src="/uploads/{{ item.stored_name }}" alt="{{ item.original_name }}" class="thumb-image">
+                    {% else %}
                     <div class="thumb-preview">{{ item.original_name.split(".")[-1].upper() }}</div>
-                    <div>{{ item.original_name }}</div>
+                    {% endif %}
+                    <div class="thumb-title">{{ item.original_name }}</div>
+                    <div class="timeline-date">{{ item.upload_note or "Upload received" }}</div>
                 </a>
                 {% else %}
                 <p>No uploads yet.</p>
@@ -41,10 +92,9 @@
             <form method="post" action="/profiles/{{ person.id }}/timeline" class="stack">
                 <label>Type
                     <select name="item_type">
-                        <option value="message">Message</option>
-                        <option value="event">Event</option>
-                        <option value="date">Date / Meetup</option>
-                        <option value="logistics">Payment / Logistics</option>
+                        {% for option in timeline_options %}
+                        <option value="{{ option }}">{{ option.title() }}</option>
+                        {% endfor %}
                     </select>
                 </label>
                 <label>Details<textarea name="content" rows="4" required></textarea></label>
@@ -53,9 +103,23 @@
             <div class="timeline">
                 {% for item in person.timeline_items %}
                 <div class="timeline-item">
-                    <div class="timeline-type">{{ item.item_type }}</div>
-                    <div>{{ item.content }}</div>
-                    <div class="timeline-date">{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+                    <form method="post" action="/profiles/{{ person.id }}/timeline/{{ item.id }}/edit" class="stack">
+                        <label>Type
+                            <select name="item_type">
+                                {% for option in timeline_options %}
+                                <option value="{{ option }}" {% if item.item_type == option %}selected{% endif %}>{{ option.title() }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>Details<textarea name="content" rows="3" required>{{ item.content }}</textarea></label>
+                        <div class="timeline-actions">
+                            <div class="timeline-date">{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+                            <button type="submit">Save</button>
+                        </div>
+                    </form>
+                    <form method="post" action="/profiles/{{ person.id }}/timeline/{{ item.id }}/delete">
+                        <button type="submit" class="danger-button">Delete</button>
+                    </form>
                 </div>
                 {% else %}
                 <p>No timeline items yet.</p>
@@ -74,6 +138,7 @@
                 <label>Green Flags<textarea name="green_flags" rows="3">{{ person.green_flags or "" }}</textarea></label>
                 <label>Boundaries<textarea name="boundaries" rows="3">{{ person.boundaries or "" }}</textarea></label>
                 <label>Follow-up Reminders<textarea name="reminders" rows="3">{{ person.reminders or "" }}</textarea></label>
+                <label>Reminder Date<input type="date" name="reminder_date" value="{{ person.reminder_date.isoformat() if person.reminder_date else '' }}"></label>
                 <label>Initial Review Ready
                     <select name="initial_review_ready">
                         <option value="false" {% if not person.initial_review_ready %}selected{% endif %}>Not Ready</option>
@@ -85,18 +150,82 @@
         </article>
 
         <article class="card">
+            <h2>Structured Overview</h2>
+            {% if person.initial_review_ready %}
+            <pre class="overview-box">{{ person.review_overview_display }}</pre>
+            {% else %}
+            <p class="helper-text">Uploads and notes can be collected now. The structured overview will appear only after you set the profile to Initial Review Ready.</p>
+            {% endif %}
+        </article>
+
+        <article class="card">
             <h2>Message Help</h2>
-            <p><strong>Initial text starters</strong></p>
-            <ul>
-                <li>General nice to meet</li>
-                <li>More flirty</li>
-            </ul>
-            <p><strong>Follow-up text</strong></p>
-            <ul>
-                <li>General flirty conversation</li>
-                <li>More direct flirty, edgy</li>
-                <li>More sexually flirty with physical compliments and sexually underpinned suggestions</li>
-            </ul>
+            <div class="message-columns">
+                <div class="message-column">
+                    <h3>Initial Text Starters</h3>
+                    {% for tone, suggestion in initial_options %}
+                    <form method="post" action="/profiles/{{ person.id }}/messages" class="message-form">
+                        <input type="hidden" name="bucket" value="initial">
+                        <input type="hidden" name="tone" value="{{ tone }}">
+                        <label>{{ tone|title }}<textarea name="content" rows="3">{{ suggestion }}</textarea></label>
+                        <button type="submit">Save Initial Option</button>
+                    </form>
+                    {% endfor %}
+                </div>
+                <div class="message-column">
+                    <h3>Follow-Up Text</h3>
+                    {% for tone, suggestion in follow_up_options %}
+                    <form method="post" action="/profiles/{{ person.id }}/messages" class="message-form">
+                        <input type="hidden" name="bucket" value="follow_up">
+                        <input type="hidden" name="tone" value="{{ tone }}">
+                        <label>{{ tone|title }}<textarea name="content" rows="4">{{ suggestion }}</textarea></label>
+                        <button type="submit">Save Follow-Up Option</button>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+        </article>
+
+        <article class="card">
+            <h2>Saved Drafts</h2>
+            <form method="post" action="/profiles/{{ person.id }}/messages" class="stack">
+                <input type="hidden" name="bucket" value="draft">
+                <label>Draft Label<input type="text" name="tone" placeholder="saved draft"></label>
+                <label>Draft Text<textarea name="content" rows="4" required></textarea></label>
+                <button type="submit">Save Draft</button>
+            </form>
+            <div class="timeline">
+                {% for item in person.saved_drafts %}
+                <div class="timeline-item">
+                    <div class="timeline-type">{{ item.tone or "saved draft" }}</div>
+                    <div>{{ item.content }}</div>
+                    <div class="timeline-date">{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+                </div>
+                {% else %}
+                <p>No saved drafts yet.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card">
+            <h2>Sent Message History</h2>
+            <form method="post" action="/profiles/{{ person.id }}/messages" class="stack">
+                <input type="hidden" name="bucket" value="sent">
+                <label>Label<input type="text" name="tone" placeholder="sent message"></label>
+                <label>Message Text<textarea name="content" rows="4" required></textarea></label>
+                <button type="submit">Add Sent Message</button>
+            </form>
+            <div class="timeline">
+                {% for item in person.sent_history %}
+                <div class="timeline-item">
+                    <div class="timeline-type">{{ item.tone or "sent message" }}</div>
+                    <div>{{ item.content }}</div>
+                    <div class="timeline-date">{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+                </div>
+                {% else %}
+                <p>No sent messages yet.</p>
+                {% endfor %}
+            </div>
         </article>
     </div>
 </section>

@@ -10,6 +10,15 @@ Private self-hosted web app for organizing social and dating conversation inform
 - Upload area
 - Notes area
 - Timeline area
+- Timeline editing
+- Profile export
+- Bulk status/tag updates
+- Duplicate profile checking
+- Reminder calendar view
+- ZIP export bundles
+- Real reminder dates
+- Duplicate merge action
+- PDF export
 - Docker Compose setup
 - External data folders
 

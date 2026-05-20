@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="page-head">
-    <h1>Create Profile</h1>
+    <div>
+        <h1>Create Profile</h1>
+        <p>New records follow: app - name - location - age</p>
+    </div>
 </section>
 
 <form method="post" action="/profiles" class="card form-grid">
@@ -10,9 +13,15 @@
     <label>Location<input type="text" name="location" placeholder="NBO West" required></label>
     <label>Age<input type="text" name="age" placeholder="23 or ??"></label>
     <label>Phone / WhatsApp<input type="text" name="phone"></label>
-    <label>Status<input type="text" name="status" value="New"></label>
-    <label>Tags<input type="text" name="tags" placeholder="funny, active"></label>
-    <label class="full">Notes<textarea name="notes" rows="5"></textarea></label>
+    <label>Status
+        <select name="status">
+            {% for option in status_options %}
+            <option value="{{ option }}">{{ option }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="full">Tags<input type="text" name="tags" placeholder="funny, active, local"></label>
+    <label class="full">Private Notes<textarea name="notes" rows="5" placeholder="Private notes only"></textarea></label>
     <button type="submit">Save Profile</button>
 </form>
 {% endblock %}

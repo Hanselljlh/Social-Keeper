@@ -1,13 +1,66 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="page-head">
-    <h1>Dashboard</h1>
+    <div>
+        <h1>Dashboard</h1>
+        <p>All people, uploads, and review status in one place.</p>
+    </div>
     <a href="/profiles/new" class="button-link">Create Profile</a>
 </section>
 
+<section class="stats-grid">
+    <article class="card stat-card">
+        <div class="stat-label">Profiles</div>
+        <div class="stat-value">{{ totals.count }}</div>
+    </article>
+    <article class="card stat-card">
+        <div class="stat-label">Review Ready</div>
+        <div class="stat-value">{{ totals.ready }}</div>
+    </article>
+    <article class="card stat-card">
+        <div class="stat-label">Waiting Review</div>
+        <div class="stat-value">{{ totals.needs_review }}</div>
+    </article>
+    <article class="card stat-card">
+        <div class="stat-label">Uploads</div>
+        <div class="stat-value">{{ totals.uploads }}</div>
+    </article>
+</section>
+
+<form method="get" action="/dashboard" class="card form-grid">
+    <label class="full">Quick Search<input type="text" name="search" value="{{ filters.search }}" placeholder="Search by app, name, location, age, status, tags, phone"></label>
+    <label>App<input type="text" name="app_name" value="{{ filters.app_name }}" placeholder="OKC"></label>
+    <label>Name<input type="text" name="name" value="{{ filters.name }}" placeholder="Annie"></label>
+    <label>Location<input type="text" name="location" value="{{ filters.location }}" placeholder="NBO West"></label>
+    <label>Age<input type="text" name="age" value="{{ filters.age }}" placeholder="23 or ??"></label>
+    <label>Status<input type="text" name="status" value="{{ filters.status }}" placeholder="Talking"></label>
+    <label class="full">Tags<input type="text" name="tags" value="{{ filters.tags }}" placeholder="friendly, local, follow-up"></label>
+    <button type="submit">Apply Filters</button>
+</form>
+
+<form method="post" action="/profiles/bulk-update" class="card stack">
+    <h2>Bulk Update</h2>
+    <p class="helper-text">Select profiles below, then update status or add one tag to all selected profiles.</p>
+    <div class="bulk-toolbar">
+        <label>Status
+            <select name="bulk_status">
+                <option value="">No status change</option>
+                {% for option in status_options %}
+                <option value="{{ option }}">{{ option }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Add Tag<input type="text" name="bulk_add_tag" placeholder="follow-up"></label>
+        <button type="submit">Apply To Selected</button>
+    </div>
+
 <section class="card-grid">
     {% for person in people %}
-    <a href="/profiles/{{ person.id }}" class="card profile-card">
+    <article class="card profile-card">
+        <div class="select-row">
+            <label class="checkbox-row"><input type="checkbox" name="profile_ids" value="{{ person.id }}"> Select</label>
+            <a href="/profiles/{{ person.id }}" class="card-link">Open Profile</a>
+        </div>
         <div class="card-top">
             <h2>{{ person.display_name }}</h2>
             <span class="status-pill">{{ person.status or "New" }}</span>
@@ -18,12 +71,79 @@
             <span>{{ person.app_name }}</span>
             <span>{{ person.location }}</span>
         </div>
-    </a>
+        <div class="meta-row">
+            <span>{{ person.uploads|length }} uploads</span>
+            <span class="{{ 'ready-badge' if person.initial_review_ready else 'pending-badge' }}">
+                {{ "Initial Review Ready" if person.initial_review_ready else "Waiting for Review" }}
+            </span>
+        </div>
+    </article>
     {% else %}
     <div class="card">
-        <h2>No profiles yet</h2>
-        <p>Create your first person profile.</p>
+        <h2>No profiles found</h2>
+        <p>Try changing your filters or create a new profile.</p>
     </div>
     {% endfor %}
+</section>
+</form>
+
+<section class="layout-two dashboard-lower">
+    <article class="card stack-section">
+        <h2>Possible Duplicates</h2>
+        <div class="timeline">
+            {% for pair in duplicates %}
+            <div class="timeline-item">
+                <div class="timeline-type">{{ pair.reasons }}</div>
+                <div><a href="/profiles/{{ pair.left.id }}">{{ pair.left.display_name }}</a></div>
+                <div><a href="/profiles/{{ pair.right.id }}">{{ pair.right.display_name }}</a></div>
+                <form method="post" action="/profiles/merge" class="duplicate-merge">
+                    <input type="hidden" name="source_id" value="{{ pair.right.id }}">
+                    <input type="hidden" name="target_id" value="{{ pair.left.id }}">
+                    <button type="submit">Merge Right Into Left</button>
+                </form>
+            </div>
+            {% else %}
+            <p>No obvious duplicates found.</p>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="card stack-section">
+        <h2>Reminder Calendar</h2>
+        <div class="reminder-groups">
+            <div>
+                <h3>Today</h3>
+                {% for person in reminder_groups.today %}
+                <p><a href="/profiles/{{ person.id }}">{{ person.display_name }}</a></p>
+                {% else %}
+                <p class="helper-text">Nothing marked for today.</p>
+                {% endfor %}
+            </div>
+            <div>
+                <h3>This Week</h3>
+                {% for person in reminder_groups.this_week %}
+                <p><a href="/profiles/{{ person.id }}">{{ person.display_name }}</a></p>
+                {% else %}
+                <p class="helper-text">Nothing marked for this week.</p>
+                {% endfor %}
+            </div>
+            <div>
+                <h3>Later</h3>
+                {% for person in reminder_groups.later %}
+                <p><a href="/profiles/{{ person.id }}">{{ person.display_name }}</a></p>
+                {% else %}
+                <p class="helper-text">Nothing marked for later.</p>
+                {% endfor %}
+            </div>
+            <div>
+                <h3>Unscheduled</h3>
+                {% for person in reminder_groups.unscheduled %}
+                <p><a href="/profiles/{{ person.id }}">{{ person.display_name }}</a></p>
+                {% else %}
+                <p class="helper-text">Everyone has a reminder note.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </article>
 </section>
 {% endblock %}

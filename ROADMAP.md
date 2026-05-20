@@ -12,15 +12,12 @@
 - External data storage
 
 ## Next
-- Edit profile page
-- Search and filters
-- Initial Review Ready workflow
-- Structured overview section
-- Tags and status helpers
-- Better upload previews
+- Backup tools inside the UI
+- Better duplicate conflict review
+- Calendar month view
+- CSV export format
 
 ## Later
-- Backups from inside the UI
 - Reminder system
 - Export tools
 - Optional API integrations behind user-provided keys
