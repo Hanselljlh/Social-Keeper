@@ -16,6 +16,9 @@ Private self-hosted web app for organizing social and dating contact information
 - Bulk status/tag updates
 - Duplicate profile checking
 - Reminder calendar view
+- Full reminder month calendar
+- CSV profile export
+- Full backup download from Settings
 - ZIP export bundles
 - Real reminder dates
 - Duplicate merge action

@@ -453,6 +453,54 @@ button,
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.month-calendar {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.calendar-row {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.35rem;
+}
+
+.calendar-head div,
+.calendar-day {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.45rem;
+    min-height: 58px;
+    background: rgba(34, 48, 61, 0.35);
+}
+
+.calendar-head div {
+    min-height: auto;
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.calendar-empty {
+    opacity: 0.35;
+}
+
+.calendar-date {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+}
+
+.calendar-person {
+    display: block;
+    color: var(--accent);
+    font-size: 0.8rem;
+    line-height: 1.2;
+    margin-top: 0.2rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .duplicate-merge {
     grid-template-columns: 1fr;
 }

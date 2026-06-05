@@ -1,4 +1,7 @@
 from pathlib import Path
+import calendar
+import csv
+import io
 import os
 import re
 import secrets
@@ -8,7 +11,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from fastapi.staticfiles import StaticFiles
@@ -425,6 +428,103 @@ def build_reminder_groups(people: list[Person]) -> dict[str, list[Person]]:
     return groups
 
 
+def build_calendar_month(people: list[Person], year: int | None = None, month: int | None = None) -> dict[str, object]:
+    today = datetime.utcnow().date()
+    year = year or today.year
+    month = month or today.month
+    first_weekday, days_in_month = calendar.monthrange(year, month)
+    people_by_day: dict[date, list[Person]] = {}
+    for person in people:
+        if person.reminder_date and person.reminder_date.year == year and person.reminder_date.month == month:
+            people_by_day.setdefault(person.reminder_date, []).append(person)
+
+    weeks: list[list[dict[str, object]]] = []
+    week: list[dict[str, object]] = [{"date": None, "people": []} for _ in range(first_weekday)]
+    for day_number in range(1, days_in_month + 1):
+        day_date = date(year, month, day_number)
+        week.append({"date": day_date, "people": people_by_day.get(day_date, [])})
+        if len(week) == 7:
+            weeks.append(week)
+            week = []
+    if week:
+        week.extend({"date": None, "people": []} for _ in range(7 - len(week)))
+        weeks.append(week)
+
+    return {
+        "label": f"{calendar.month_name[month]} {year}",
+        "year": year,
+        "month": month,
+        "weekday_labels": [calendar.day_abbr[index] for index in range(7)],
+        "weeks": weeks,
+    }
+
+
+def build_profiles_csv(people: list[Person]) -> str:
+    output = io.StringIO()
+    fieldnames = [
+        "app_name",
+        "name",
+        "location",
+        "distance",
+        "age",
+        "phone",
+        "status",
+        "tags",
+        "reminder_date",
+        "summary",
+        "notes",
+        "red_flags",
+        "green_flags",
+        "boundaries",
+        "reminders",
+        "created_at",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    for person in people:
+        writer.writerow(
+            {
+                "app_name": person.app_name,
+                "name": person.name,
+                "location": person.location,
+                "distance": person.distance or "",
+                "age": person.age or "",
+                "phone": person.phone or "",
+                "status": person.status or "New",
+                "tags": person.tags or "",
+                "reminder_date": person.reminder_date.isoformat() if person.reminder_date else "",
+                "summary": person.summary or "",
+                "notes": person.notes or "",
+                "red_flags": person.red_flags or "",
+                "green_flags": person.green_flags or "",
+                "boundaries": person.boundaries or "",
+                "reminders": person.reminders or "",
+                "created_at": person.created_at.isoformat() if person.created_at else "",
+            }
+        )
+    return output.getvalue()
+
+
+def build_full_backup(db_path: Path = DB_PATH, uploads_root: Path = UPLOADS_ROOT, exports_root: Path = EXPORTS_ROOT, backup_root: Path | None = None) -> Path:
+    backup_root = backup_root or (EXPORTS_ROOT / "backups")
+    backup_root.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_root / f"social-keeper-backup-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.zip"
+    with zipfile.ZipFile(backup_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        if db_path.exists():
+            archive.write(db_path, arcname=f"database/{db_path.name}")
+        for root, _, files in os.walk(uploads_root):
+            for filename in files:
+                source = Path(root) / filename
+                archive.write(source, arcname=f"uploads/{source.relative_to(uploads_root)}")
+        for root, _, files in os.walk(exports_root):
+            for filename in files:
+                source = Path(root) / filename
+                if source == backup_path:
+                    continue
+                archive.write(source, arcname=f"exports/{source.relative_to(exports_root)}")
+    return backup_path
+
+
 def seed_demo_data() -> None:
     with SessionLocal() as db:
         if db.query(SettingOption).count() == 0:
@@ -662,6 +762,7 @@ def dashboard(
             person.extra_tag_count = max(0, len(parse_tags(person.tags)) - len(person.card_tags))
         duplicates = find_duplicates(people)
         reminder_groups = build_reminder_groups(people)
+        calendar_month = build_calendar_month(people)
         totals = {
             "count": len(people),
             "profile_intake": sum(1 for person in people for upload in person.uploads if (upload.upload_category or "profile_intake") == "profile_intake"),
@@ -678,10 +779,38 @@ def dashboard(
             "totals": totals,
             "duplicates": duplicates,
             "reminder_groups": reminder_groups,
+            "calendar_month": calendar_month,
             "status_options": STATUS_OPTIONS,
             "version": app_version(),
         },
     )
+
+
+@app.post("/profiles/export-csv")
+def export_profiles_csv(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    with get_db() as db:
+        people = db.query(Person).order_by(Person.created_at.desc()).all()
+        csv_text = build_profiles_csv(people)
+    filename = f"social-keeper-profiles-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/settings/backup")
+def download_full_backup(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    backup_path = build_full_backup()
+    return FileResponse(backup_path, filename=backup_path.name, media_type="application/zip")
 
 
 @app.get("/manage", response_class=HTMLResponse)

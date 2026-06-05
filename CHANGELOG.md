@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 - 2026-06-05
+- Added CSV export for all profiles from the dashboard
+- Added full backup download from Settings covering database, uploads, and exports
+- Added a real month calendar view for profile reminder dates
+- Added pytest coverage for CSV export, calendar grouping, and backup bundle contents
+- Updated roadmap to remove completed export/reminder/backup items
+
 ## 0.5.1 - 2026-05-20
 - Tightened dashboard profile cards to a compact dating-app style layout
 - Limited card tag display to three visible tags with overflow shown as `+N`

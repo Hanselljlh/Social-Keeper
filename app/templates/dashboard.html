@@ -5,7 +5,12 @@
         <h1>Browse Profiles</h1>
         <p>Browse people visually like a dating app, then open the profile you want.</p>
     </div>
-    <a href="/profiles/new" class="button-link">Create Profile</a>
+    <div class="page-actions">
+        <a href="/profiles/new" class="button-link">Create Profile</a>
+        <form method="post" action="/profiles/export-csv">
+            <button type="submit">Export CSV</button>
+        </form>
+    </div>
 </section>
 
 <section class="stats-grid">
@@ -100,7 +105,29 @@
     </article>
 
     <article class="card stack-section">
-        <h2>Reminder Calendar</h2>
+        <h2>{{ calendar_month.label }}</h2>
+        <div class="month-calendar">
+            <div class="calendar-row calendar-head">
+                {% for label in calendar_month.weekday_labels %}
+                <div>{{ label }}</div>
+                {% endfor %}
+            </div>
+            {% for week in calendar_month.weeks %}
+            <div class="calendar-row">
+                {% for day in week %}
+                <div class="calendar-day {% if not day.date %}calendar-empty{% endif %}">
+                    {% if day.date %}
+                    <div class="calendar-date">{{ day.date.day }}</div>
+                    {% for person in day.people %}
+                    <a href="/profiles/{{ person.id }}" class="calendar-person">{{ person.name }}</a>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <h2>Reminder Groups</h2>
         <div class="reminder-groups">
             <div>
                 <h3>Today</h3>
